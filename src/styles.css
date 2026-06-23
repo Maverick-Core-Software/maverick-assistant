@@ -296,6 +296,31 @@ body {
     0 -8px 28px rgba(0, 0, 0, .40);
 }
 
+/* ── Estimate confirm bar ── */
+.estimateConfirmBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 16px;
+  background: rgba(255, 180, 0, .08);
+  border-bottom: 1px solid rgba(255, 180, 0, .25);
+}
+.estimateConfirmInfo { font-size: 13px; color: rgba(255, 210, 100, .90); }
+.estimateConfirmActions { display: flex; gap: 6px; flex-shrink: 0; }
+.estimateConfirmClear {
+  padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,.15);
+  background: transparent; color: rgba(255,255,255,.50); font-size: 12px; cursor: pointer;
+}
+.estimateConfirmClear:hover { background: rgba(255,255,255,.08); }
+.estimateConfirmBuild {
+  padding: 5px 14px; border-radius: 6px; border: none;
+  background: rgba(255, 160, 0, .85); color: #0a0a10; font-size: 13px;
+  font-weight: 700; letter-spacing: .04em; cursor: pointer; text-transform: uppercase;
+}
+.estimateConfirmBuild:hover { background: rgba(255, 185, 0, .95); }
+.estimateConfirmBuild:disabled, .estimateConfirmClear:disabled { opacity: .45; cursor: not-allowed; }
+
 /* ── Workflow mode buttons ── */
 .workflowStrip {
   display: flex;

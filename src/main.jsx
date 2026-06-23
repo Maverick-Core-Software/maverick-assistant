@@ -4,9 +4,8 @@ import { isDocumentResponse, MavMarkdown } from './mavUtils.js';
 import './styles.css';
 
 const WORKFLOW_MODES = [
-  { id: 'ask',      label: 'ASK MAVERICK', accent: 'cyan',  tooltip: "Ask anything — Maverick will automatically recognize when you're scoping a job and shift into estimator mode." },
-  { id: 'estimate', label: 'ESTIMATE',     accent: 'amber', tooltip: 'Start a new job estimate — describe the project or upload blueprints/proposals. Maverick scopes it, matches the price book, and pushes a real HCP estimate (same pipeline as the email watcher).' },
-  { id: 'ops',      label: 'OPERATIONS',   accent: 'green', tooltip: 'Personal assistant — read emails, Word/PDF docs, build spreadsheets, send emails, create agents and skills' },
+  { id: 'ask', label: 'ASK MAVERICK', accent: 'cyan',  tooltip: "Ask anything, scope jobs, and build estimates — say \"build it\" when ready to push to HCP." },
+  { id: 'ops', label: 'OPERATIONS',   accent: 'green', tooltip: 'Personal assistant — read emails, Word/PDF docs, build spreadsheets, send emails, create agents and skills' },
 ];
 
 const MAX_FILE_BYTES = 8000;
@@ -233,6 +232,7 @@ function App() {
   const [chatInput, setChatInput] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
+  const [pendingEstimate, setPendingEstimate] = useState(null);
   const [showFolderPicker, setShowFolderPicker] = useState(false);
   const [showJobHistory, setShowJobHistory] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -255,15 +255,18 @@ function App() {
     rec.interimResults = true;
     rec.lang = 'en-US';
     let final = chatInput;
+    let silenceTimer = null;
     rec.onresult = e => {
+      clearTimeout(silenceTimer);
       let interim = '';
       for (let j = e.resultIndex; j < e.results.length; j++) {
         if (e.results[j].isFinal) final += e.results[j][0].transcript + ' ';
         else interim = e.results[j][0].transcript;
       }
       setChatInput(final + interim);
+      silenceTimer = setTimeout(() => rec.stop(), 3000);
     };
-    rec.onend = () => setIsListening(false);
+    rec.onend = () => { clearTimeout(silenceTimer); setIsListening(false); };
     rec.onerror = () => setIsListening(false);
     recognitionRef.current = rec;
     rec.start();
@@ -341,13 +344,7 @@ function App() {
     const controller = new AbortController();
     chatAbortRef.current = controller;
 
-    if (workflowMode === 'estimate') {
-      pushChat(prev => {
-        const next = [...prev];
-        next[next.length - 1] = { role: 'assistant', content: '⟳ Pulling in job data and pricing — this takes a moment...' };
-        return next;
-      });
-    } else if (workflowMode === 'ops') {
+    if (workflowMode === 'ops') {
       pushChat(prev => {
         const next = [...prev];
         next[next.length - 1] = { role: 'assistant', content: '⟳ Maverick OPS is working on it...' };
@@ -360,7 +357,84 @@ function App() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ prompt, mode: workflowMode, history: chatHistory, attachments: attachedFiles }),
+        body: JSON.stringify({
+          prompt,
+          mode: workflowMode,
+          history: chatHistory,
+          attachments: attachedFiles,
+          ...(pendingEstimate && workflowMode === 'ask' ? { pendingItems: pendingEstimate.items, pendingCustomer: pendingEstimate.customer } : {}),
+        }),
+        signal: controller.signal
+      });
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          if (raw === '[DONE]') continue;
+          try {
+            const tok = JSON.parse(raw);
+            const delta = tok.choices?.[0]?.delta?.content || '';
+            if (delta) {
+              accum += delta;
+              pushChat(prev => {
+                const next = [...prev];
+                next[next.length - 1] = { role: 'assistant', content: accum };
+                return next;
+              });
+            }
+          } catch {}
+        }
+      }
+      // Detect and strip [ESTIMATE_READY] block
+      const estMatch = accum.match(/\[ESTIMATE_READY\]([\s\S]*?)\[\/ESTIMATE_READY\]/);
+      if (estMatch) {
+        try {
+          setPendingEstimate(JSON.parse(estMatch[1]));
+          accum = accum.replace(/\s*\[ESTIMATE_READY\][\s\S]*?\[\/ESTIMATE_READY\]/, '').trimEnd();
+          pushChat(prev => {
+            const next = [...prev];
+            next[next.length - 1] = { role: 'assistant', content: accum };
+            return next;
+          });
+        } catch {}
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        pushChat(prev => {
+          const next = [...prev];
+          next[next.length - 1] = { role: 'assistant', content: `[Error: ${err.message}]` };
+          return next;
+        });
+      }
+    } finally {
+      setChatBusy(false);
+      chatAbortRef.current = null;
+      setAttachedFiles([]);
+    }
+  }
+
+  async function handleBuildEstimate() {
+    if (!pendingEstimate?.items?.length || chatBusy) return;
+    const { items, customer = {} } = pendingEstimate;
+    setPendingEstimate(null);
+    setChatBusy(true);
+    pushChat(prev => [...prev, { role: 'user', content: '⚡ Build estimate' }, { role: 'assistant', content: '' }]);
+    const controller = new AbortController();
+    chatAbortRef.current = controller;
+    let accum = '';
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt: 'Build estimate', mode: 'estimate-ready', lineItems: items, pendingCustomer: customer }),
         signal: controller.signal
       });
       const reader = response.body.getReader();
@@ -401,7 +475,6 @@ function App() {
     } finally {
       setChatBusy(false);
       chatAbortRef.current = null;
-      setAttachedFiles([]);
     }
   }
 
@@ -449,6 +522,21 @@ function App() {
 
       {/* ── Controls ── */}
       <div className="assistantControls">
+        {/* Estimate confirm bar */}
+        {pendingEstimate && (
+          <div className="estimateConfirmBar">
+            <span className="estimateConfirmInfo">
+              📋 <strong>{(pendingEstimate.items || []).length} item{(pendingEstimate.items || []).length !== 1 ? 's' : ''}</strong> ready to push
+              {pendingEstimate.customer?.name ? ` — ${pendingEstimate.customer.name}` : ''}
+            </span>
+            <div className="estimateConfirmActions">
+              <button className="estimateConfirmClear" onClick={() => setPendingEstimate(null)} disabled={chatBusy} type="button">✕</button>
+              <button className="estimateConfirmBuild" onClick={handleBuildEstimate} disabled={chatBusy} type="button">
+                {chatBusy ? 'Creating…' : '⚡ BUILD IT'}
+              </button>
+            </div>
+          </div>
+        )}
         {/* Mode buttons */}
         <div className="workflowStrip">
           {WORKFLOW_MODES.map(mode => (

@@ -14,6 +14,7 @@ module.exports = {
         MCC_URL: 'http://localhost:3000',
       },
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
+      windowsHide: true,
     }
   ]
 };
