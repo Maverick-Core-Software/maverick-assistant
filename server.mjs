@@ -39,11 +39,11 @@ const server = http.createServer(async (req, res) => {
       const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
       let body = hasBody ? await readBody(req) : undefined;
 
-      // Mode allowlist — employees may not access owner-only modes
+      // Mode allowlist + employee channel enforcement
       if (url.pathname === '/api/chat' && body) {
         try {
           const parsed = JSON.parse(body.toString());
-          const ALLOWED = new Set(['ask', 'estimate', 'ops']);
+          const ALLOWED = new Set(['ask', 'estimate', 'ops', 'estimate-ready', 'agent']);
           if (!ALLOWED.has(parsed.mode ?? 'ask')) {
             res.writeHead(403, { 'content-type': 'application/json' });
             res.end(JSON.stringify({ error: 'Mode not available in this app.' }));

@@ -4,8 +4,9 @@ import { isDocumentResponse, MavMarkdown } from './mavUtils.js';
 import './styles.css';
 
 const WORKFLOW_MODES = [
-  { id: 'ask', label: 'ASK MAVERICK', accent: 'cyan',  tooltip: "Ask anything, scope jobs, and build estimates — say \"build it\" when ready to push to HCP." },
-  { id: 'ops', label: 'OPERATIONS',   accent: 'green', tooltip: 'Personal assistant — read emails, Word/PDF docs, build spreadsheets, send emails, create agents and skills' },
+  { id: 'ask',   label: 'ASK MAVERICK', accent: 'cyan',   tooltip: "Ask anything, scope jobs, and build estimates — say \"build it\" when ready to push to HCP." },
+  { id: 'agent', label: 'MAVERICK',     accent: 'purple', tooltip: 'Field assistant — check your schedule, look up job details and customer info, ask code and procedure questions.' },
+  { id: 'ops',   label: 'OPERATIONS',   accent: 'green',  tooltip: 'Personal assistant — read emails, Word/PDF docs, build spreadsheets, send emails, create agents and skills' },
 ];
 
 const MAX_FILE_BYTES = 8000;
@@ -422,8 +423,8 @@ function App() {
   }
 
   async function handleBuildEstimate() {
-    if (!pendingEstimate?.items?.length || chatBusy) return;
-    const { items, customer = {} } = pendingEstimate;
+    if ((!pendingEstimate?.items?.length && !pendingEstimate?.newItems?.length) || chatBusy) return;
+    const { items = [], newItems = [], customer = {}, techIds, depositPercent } = pendingEstimate;
     setPendingEstimate(null);
     setChatBusy(true);
     pushChat(prev => [...prev, { role: 'user', content: '⚡ Build estimate' }, { role: 'assistant', content: '' }]);
@@ -434,7 +435,15 @@ function App() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ prompt: 'Build estimate', mode: 'estimate-ready', lineItems: items, pendingCustomer: customer }),
+        body: JSON.stringify({
+          prompt: 'Build estimate',
+          mode: 'estimate-ready',
+          lineItems: items,
+          newPricebookItems: newItems.length ? newItems : undefined,
+          pendingCustomer: customer,
+          techIds: techIds?.length ? techIds : undefined,
+          depositPercent: depositPercent ?? undefined,
+        }),
         signal: controller.signal
       });
       const reader = response.body.getReader();
@@ -526,7 +535,7 @@ function App() {
         {pendingEstimate && (
           <div className="estimateConfirmBar">
             <span className="estimateConfirmInfo">
-              📋 <strong>{(pendingEstimate.items || []).length} item{(pendingEstimate.items || []).length !== 1 ? 's' : ''}</strong> ready to push
+              📋 <strong>{((pendingEstimate.items || []).length + (pendingEstimate.newItems || []).length)} item{((pendingEstimate.items || []).length + (pendingEstimate.newItems || []).length) !== 1 ? 's' : ''}</strong> ready to push
               {pendingEstimate.customer?.name ? ` — ${pendingEstimate.customer.name}` : ''}
             </span>
             <div className="estimateConfirmActions">
