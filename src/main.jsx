@@ -745,7 +745,8 @@ function App() {
           </div>
         )}
 
-        {showVoice && <MCAVoicePanel onClose={() => setShowVoice(false)} apiBase="" />}
+        {/* Voice panel hidden — OpenAI Realtime API access pending */}
+        {false && showVoice && <MCAVoicePanel onClose={() => setShowVoice(false)} apiBase="" />}
         {/* Input form */}
         <form className="assistantForm" onSubmit={handleSubmit}>
           <input ref={fileInputRef} type="file" multiple accept=".pdf,.docx,.txt,.md,.jpg,.jpeg,.png,.gif,.webp" style={{ display: 'none' }} onChange={handleFilePick} />
@@ -768,12 +769,7 @@ function App() {
               title={isListening ? 'Stop recording' : 'Voice input'}
               disabled={chatBusy}
             >{isListening ? '⏹' : '🎤'}</button>
-            <button
-              type="button"
-              className={`voiceCallBtn${showVoice ? ' active' : ''}`}
-              onClick={() => setShowVoice(v => !v)}
-              title="Live voice mode"
-            >🎙 VOICE</button>
+            {/* 🎙 VOICE button hidden — OpenAI Realtime API access pending */}
             <div className="assistantActionsSpacer" />
             {chatBusy
               ? <button type="button" className="stopBtn" onClick={() => chatAbortRef.current?.abort()}>[ STOP ]</button>
