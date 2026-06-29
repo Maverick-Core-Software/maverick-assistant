@@ -860,18 +860,18 @@ function App() {
               }}>CLR</button>
             )}
             <button type="button" className="jobHistoryBtn" onClick={() => setShowJobHistory(v => !v)} title="Job history">📋</button>
+            {showJobHistory && (
+              <JobHistoryPanel
+                onLoad={id => { pushChat(loadJob(id)); setAttachedFiles([]); }}
+                onClose={() => setShowJobHistory(false)}
+              />
+            )}
           </div>
         </form>
       </div>
 
       {showFolderPicker && (
         <FolderPickerModal onSelect={handleFolderSelect} onClose={() => setShowFolderPicker(false)} />
-      )}
-      {showJobHistory && (
-        <JobHistoryPanel
-          onLoad={id => { pushChat(loadJob(id)); setAttachedFiles([]); }}
-          onClose={() => setShowJobHistory(false)}
-        />
       )}
     </div>
   );

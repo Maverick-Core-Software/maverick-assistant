@@ -11,7 +11,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: '3012',
-        MCC_URL: 'http://localhost:3000',
+        MCC_URL: 'http://localhost:3011',
       },
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
       windowsHide: true,
